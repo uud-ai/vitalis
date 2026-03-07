@@ -1198,18 +1198,13 @@ function renderStats() {
 function askApiKeyIfNeeded() {
   if (!state.apiKey) {
     setTimeout(() => {
-      const key = prompt('Введи OpenRouter API ключ (sk-or-...) для AI-анализа.
-
-Получить бесплатно: openrouter.ai
-Оставь пустым чтобы пропустить:');
+      const key = prompt('Введи OpenRouter API ключ (sk-or-...) для AI-анализа.\n\nПолучить бесплатно: openrouter.ai\nОставь пустым чтобы пропустить:');
       if (key && key.trim()) { state.apiKey = key.trim(); save(); toast('API ключ сохранён ✓'); }
     }, 1500);
   }
 }
 function askApiKey() {
-  const key = prompt('Введи OpenRouter API ключ (sk-or-...) для AI-анализа.
-
-Получить бесплатно: openrouter.ai');
+  const key = prompt('Введи OpenRouter API ключ (sk-or-...) для AI-анализа.\n\nПолучить бесплатно: openrouter.ai');
   if (key && key.trim()) { state.apiKey = key.trim(); save(); toast('API ключ сохранён ✓'); }
 }
 
