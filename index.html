@@ -325,6 +325,12 @@ body::before {
 .log-entry-title { font-size:13px; font-weight:700; margin-bottom:2px; }
 .log-entry-sub { font-size:12px; color:var(--text3); }
 .log-entry-time { font-family:var(--mono); font-size:10px; color:var(--text3); flex-shrink:0; }
+.log-entry-del {
+  background:none; border:none; cursor:pointer; padding:4px 6px;
+  color:var(--text3); font-size:16px; border-radius:6px; flex-shrink:0;
+  transition:all .15s; line-height:1;
+}
+.log-entry-del:hover { background:var(--red-dim); color:var(--red); }
 
 /* ── AI SCREEN ── */
 .ai-screen { padding:20px; }
@@ -1055,6 +1061,15 @@ function renderHistories() {
   }));
 }
 
+function deleteLog(ts) {
+  const idx = state.logs.findIndex(l => l.ts === ts);
+  if (idx >= 0) {
+    state.logs.splice(idx, 1);
+    save(); renderDash(); renderHistories(); renderWeek();
+    toast('Запись удалена');
+  }
+}
+
 function renderHistory(containerId, type, mapper) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -1064,6 +1079,7 @@ function renderHistory(containerId, type, mapper) {
     entries.map(l => {
       const m = mapper(l);
       const t = new Date(l.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+      const ts = l.ts.replace(/'/g,"\'");
       return `<div class="log-entry">
         <div class="log-entry-icon">${m.icon}</div>
         <div class="log-entry-body">
@@ -1071,6 +1087,7 @@ function renderHistory(containerId, type, mapper) {
           <div class="log-entry-sub">${m.sub}</div>
         </div>
         <div class="log-entry-time">${t}</div>
+        <button class="log-entry-del" onclick="deleteLog('${ts}')" title="Удалить">✕</button>
       </div>`;
     }).join('');
 }
