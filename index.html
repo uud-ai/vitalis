@@ -1008,19 +1008,21 @@ async function generateInsight() {
   el.textContent = 'Анализирую...';
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+state.apiKey},
       body: JSON.stringify({
-        model:'claude-sonnet-4-20250514',
+        model:'anthropic/claude-haiku-4-5',
         max_tokens:150,
-        system:'Ты персональный AI коуч по здоровью. Давай краткие (1-2 предложения), конкретные, мотивирующие советы на русском языке на основе данных пользователя. Будь как хороший тренер — честно, конкретно, с заботой.',
-        messages:[{role:'user',content:`Данные за сегодня: ${summary}. Дай короткий персональный совет.`}]
+        messages:[
+          {role:'system',content:'Ты персональный AI коуч по здоровью. Давай краткие (1-2 предложения), конкретные, мотивирующие советы на русском языке на основе данных пользователя. Будь как хороший тренер — честно, конкретно, с заботой.'},
+          {role:'user',content:`Данные за сегодня: ${summary}. Дай короткий персональный совет.`}
+        ]
       })
     });
     const data = await res.json();
     el.className = 'ai-insight-text';
-    el.textContent = data.content?.[0]?.text || 'Продолжай в том же духе!';
+    el.textContent = data.choices?.[0]?.message?.content || 'Продолжай в том же духе!';
   } catch {
     el.className = 'ai-insight-text';
     el.textContent = 'Отличные данные! Продолжай вести дневник.';
@@ -1073,18 +1075,20 @@ async function sendChat(msgOverride) {
   textEl.textContent = '';
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+state.apiKey},
       body: JSON.stringify({
-        model:'claude-sonnet-4-20250514',
+        model:'anthropic/claude-haiku-4-5',
         max_tokens:800,
-        system:`Ты Vitalis — персональный AI коуч по здоровью и фитнесу. Говоришь по-русски. Анализируешь данные пользователя о питании, сне, активности и даёшь конкретные, научно обоснованные советы. Ты заботливый, мотивирующий, без лишней воды. Используй эмодзи умеренно.\n\nДанные пользователя за последние 7 дней:\n${buildContext()}`,
-        messages: chatHistory
+        messages:[
+          {role:'system',content:`Ты Vitalis — персональный AI коуч по здоровью и фитнесу. Говоришь по-русски. Анализируешь данные пользователя о питании, сне, активности и даёшь конкретные, научно обоснованные советы. Ты заботливый, мотивирующий, без лишней воды. Используй эмодзи умеренно.\n\nДанные пользователя за последние 7 дней:\n${buildContext()}`},
+          ...chatHistory
+        ]
       })
     });
     const data = await res.json();
-    const reply = data.content?.[0]?.text || 'Не удалось получить ответ.';
+    const reply = data.choices?.[0]?.message?.content || 'Не удалось получить ответ.';
     textEl.className = '';
     textEl.textContent = reply;
     chatHistory.push({role:'assistant', content:reply});
@@ -1194,13 +1198,18 @@ function renderStats() {
 function askApiKeyIfNeeded() {
   if (!state.apiKey) {
     setTimeout(() => {
-      const key = prompt('Введи OpenRouter API ключ (sk-or-...) для AI-анализа:\n\nОставь пустым чтобы пропустить:');
+      const key = prompt('Введи OpenRouter API ключ (sk-or-...) для AI-анализа.
+
+Получить бесплатно: openrouter.ai
+Оставь пустым чтобы пропустить:');
       if (key && key.trim()) { state.apiKey = key.trim(); save(); toast('API ключ сохранён ✓'); }
     }, 1500);
   }
 }
 function askApiKey() {
-  const key = prompt('Введи OpenRouter API ключ (sk-or-...) для AI-анализа:');
+  const key = prompt('Введи OpenRouter API ключ (sk-or-...) для AI-анализа.
+
+Получить бесплатно: openrouter.ai');
   if (key && key.trim()) { state.apiKey = key.trim(); save(); toast('API ключ сохранён ✓'); }
 }
 
