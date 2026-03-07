@@ -524,27 +524,44 @@ body::before {
         <div class="log-group">
           <div class="log-label">Быстрый выбор</div>
           <div class="quick-chips" id="food-chips">
-            <button class="chip" onclick="addFood('Завтрак',400)">🥣 Завтрак ~400</button>
-            <button class="chip" onclick="addFood('Обед',600)">🍲 Обед ~600</button>
-            <button class="chip" onclick="addFood('Ужин',500)">🍽 Ужин ~500</button>
-            <button class="chip" onclick="addFood('Перекус',150)">🍎 Перекус ~150</button>
-            <button class="chip" onclick="addFood('Кофе',50)">☕ Кофе ~50</button>
-            <button class="chip" onclick="addFood('Протеин',200)">💪 Протеин ~200</button>
+            <button class="chip" onclick="setFoodDesc('Овсянка на молоке 200г')">🥣 Завтрак</button>
+            <button class="chip" onclick="setFoodDesc('Гречка 150г, куриная грудка 150г, салат')">🍲 Обед</button>
+            <button class="chip" onclick="setFoodDesc('Рис 120г, рыба 130г, овощи тушёные')">🍽 Ужин</button>
+            <button class="chip" onclick="setFoodDesc('Яблоко, горсть орехов')">🍎 Перекус</button>
+            <button class="chip" onclick="setFoodDesc('Кофе с молоком')">☕ Кофе</button>
+            <button class="chip" onclick="setFoodDesc('Протеиновый коктейль 300мл')">💪 Протеин</button>
           </div>
         </div>
         <div class="log-group">
-          <div class="log-label">Описание</div>
-          <textarea class="log-textarea" id="foodDesc" placeholder="Что ел? Гречка с курицей, салат, стакан кефира..."></textarea>
+          <div class="log-label">Что съел? Опиши подробнее</div>
+          <textarea class="log-textarea" id="foodDesc" placeholder="Например: гречка 200г, куриная грудка 150г, огурец, чай без сахара..."></textarea>
         </div>
-        <div class="log-group">
-          <div class="log-label">Калории (примерно)</div>
+
+        <!-- AI результат -->
+        <div id="foodAiResult" style="display:none;background:var(--green-dim);border:1px solid var(--border2);border-radius:12px;padding:14px 16px;">
+          <div style="font-size:11px;color:var(--green);font-family:var(--mono);letter-spacing:1px;margin-bottom:8px">◎ AI ПОДСЧЁТ</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-family:var(--mono);font-size:28px;font-weight:700;color:var(--green)" id="foodAiKcal">—</span>
+            <span style="font-size:13px;color:var(--text2)">ккал</span>
+          </div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.5" id="foodAiBreakdown">—</div>
+        </div>
+
+        <!-- Ошибка / ручной ввод -->
+        <div id="foodManualWrap" style="display:none">
+          <div class="log-label" style="margin-bottom:6px">Введи калории вручную</div>
           <div class="slider-row">
-            <input type="range" class="log-slider" id="foodKcal" min="50" max="1200" value="400"
-              oninput="this.style.setProperty('--pct',((this.value-50)/(1200-50)*100)+'%');document.getElementById('foodKcalVal').textContent=this.value">
+            <input type="range" class="log-slider" id="foodKcal" min="50" max="1500" value="400"
+              oninput="this.style.setProperty('--pct',((this.value-50)/1450*100)+'%');document.getElementById('foodKcalVal').textContent=this.value">
             <span class="slider-val" id="foodKcalVal">400</span>
           </div>
         </div>
-        <button class="btn-log" onclick="logFood()">＋ Записать приём пищи</button>
+
+        <div style="display:grid;grid-template-columns:1fr auto;gap:10px">
+          <button class="btn-log" id="btnCalcKcal" onclick="calcKcalAI()">🤖 Посчитать калории</button>
+          <button class="btn-log" onclick="logFood()" style="background:var(--green2);min-width:52px" id="btnLogFood" disabled>＋</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);text-align:center;margin-top:4px" id="foodLogHint">Сначала нажми «Посчитать калории»</div>
       </div>
       <div class="log-history" id="foodHistory"></div>
     </div>
@@ -870,18 +887,97 @@ function renderWeek() {
 let selectedAct = {name:'Прогулка', icon:'🚶'};
 let selectedMood = {name:'Хорошо', icon:'😊'};
 
-function addFood(name, kcal) {
-  state.logs.push({type:'food', data:{name, kcal}, ts: new Date().toISOString()});
-  save(); toast(`+${kcal} ккал: ${name}`); renderDash(); renderHistories();
-  autoInsight();
+function setFoodDesc(text) {
+  document.getElementById('foodDesc').value = text;
+  // reset previous result
+  document.getElementById('foodAiResult').style.display = 'none';
+  document.getElementById('foodManualWrap').style.display = 'none';
+  document.getElementById('btnLogFood').disabled = true;
+  document.getElementById('foodLogHint').textContent = 'Сначала нажми «Посчитать калории»';
+}
+
+let _aiKcal = 0;
+let _aiDesc = '';
+
+async function calcKcalAI() {
+  const desc = document.getElementById('foodDesc').value.trim();
+  if (!desc) { toast('Опиши что съел!'); return; }
+  if (!state.apiKey) { askApiKey(); return; }
+
+  const btn = document.getElementById('btnCalcKcal');
+  btn.textContent = '⏳ Считаю...';
+  btn.disabled = true;
+  document.getElementById('foodAiResult').style.display = 'none';
+  document.getElementById('foodManualWrap').style.display = 'none';
+  document.getElementById('btnLogFood').disabled = true;
+
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','Authorization':'Bearer '+state.apiKey},
+      body: JSON.stringify({
+        model: 'anthropic/claude-haiku-4-5',
+        max_tokens: 300,
+        messages: [{
+          role: 'system',
+          content: 'Ты нутрициолог. Отвечай ТОЛЬКО в формате JSON без markdown. Пример: {"total":450,"breakdown":[{"item":"Гречка 150г","kcal":170},{"item":"Курица 100г","kcal":165}]}'
+        },{
+          role: 'user',
+          content: `Посчитай калории: ${desc}. Верни JSON с полями total (число) и breakdown (массив item+kcal).`
+        }]
+      })
+    });
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content || '';
+
+    // Parse JSON from response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('bad response');
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    _aiKcal = Math.round(parsed.total || 0);
+    _aiDesc = desc;
+
+    // Show result
+    document.getElementById('foodAiKcal').textContent = _aiKcal;
+    const breakdown = (parsed.breakdown || [])
+      .map(b => `${b.item}: ${b.kcal} ккал`).join(' • ');
+    document.getElementById('foodAiBreakdown').textContent = breakdown;
+    document.getElementById('foodAiResult').style.display = 'block';
+    document.getElementById('btnLogFood').disabled = false;
+    document.getElementById('foodLogHint').textContent = 'Нажми ＋ чтобы записать';
+
+  } catch(e) {
+    toast('Ошибка AI — введи калории вручную');
+    document.getElementById('foodManualWrap').style.display = 'block';
+    document.getElementById('btnLogFood').disabled = false;
+    document.getElementById('foodLogHint').textContent = 'Введи вручную и нажми ＋';
+  }
+
+  btn.textContent = '🤖 Посчитать калории';
+  btn.disabled = false;
 }
 
 function logFood() {
   const desc = document.getElementById('foodDesc').value.trim() || 'Приём пищи';
-  const kcal = +document.getElementById('foodKcal').value;
+  // Use AI result if available, otherwise manual slider
+  const kcal = _aiKcal > 0 && _aiDesc === desc
+    ? _aiKcal
+    : +document.getElementById('foodKcal').value;
+
   state.logs.push({type:'food', data:{name:desc, kcal}, ts: new Date().toISOString()});
   document.getElementById('foodDesc').value = '';
-  save(); toast('Питание записано ✓'); renderDash(); renderHistories();
+  document.getElementById('foodAiResult').style.display = 'none';
+  document.getElementById('btnLogFood').disabled = true;
+  document.getElementById('foodLogHint').textContent = 'Сначала нажми «Посчитать калории»';
+  _aiKcal = 0; _aiDesc = '';
+  save(); toast(`✓ ${kcal} ккал записано`); renderDash(); renderHistories();
+  autoInsight();
+}
+
+function addFood(name, kcal) {
+  state.logs.push({type:'food', data:{name, kcal}, ts: new Date().toISOString()});
+  save(); toast(`+${kcal} ккал: ${name}`); renderDash(); renderHistories();
   autoInsight();
 }
 
