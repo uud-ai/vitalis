@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Vitalis — AI Трекер</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#050a0e">
+<link rel="manifest" href="vitalis-manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #050a0e;
+  --bg2:       #0a1520;
+  --bg3:       #0f2030;
+  --card:      #0d1e2e;
+  --card2:     #122436;
+  --border:    rgba(0,255,150,.12);
+  --border2:   rgba(0,255,150,.25);
+  --green:     #00ff96;
+  --green2:    #00cc78;
+  --green-dim: rgba(0,255,150,.15);
+  --amber:     #ffb800;
+  --amber-dim: rgba(255,184,0,.15);
+  --red:       #ff4d6d;
+  --red-dim:   rgba(255,77,109,.15);
+  --blue:      #00c8ff;
+  --blue-dim:  rgba(0,200,255,.15);
+  --purple:    #b57aff;
+  --purple-dim:rgba(181,122,255,.15);
+  --text:      #e8f4f0;
+  --text2:     rgba(232,244,240,.5);
+  --text3:     rgba(232,244,240,.25);
+  --radius:    16px;
+  --mono:      'Space Mono', monospace;
+  --sans:      'Syne', sans-serif;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  padding-bottom: 80px;
+}
+
+/* ── SCANLINE TEXTURE ── */
+body::before {
+  content:'';
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,150,.012) 2px, rgba(0,255,150,.012) 4px),
+    radial-gradient(ellipse at 20% 10%, rgba(0,255,150,.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(0,200,255,.04) 0%, transparent 50%);
+}
+
+/* ── HEADER ── */
+.header {
+  position: sticky; top:0; z-index:100;
+  background: rgba(5,10,14,.92);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-logo {
+  font-family: var(--mono);
+  font-size: 18px; font-weight:700; letter-spacing:2px;
+  color: var(--green);
+  display:flex; align-items:center; gap:8px;
+}
+.header-logo-dot {
+  width:8px; height:8px; border-radius:50%;
+  background: var(--green);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100%{box-shadow:0 0 0 0 rgba(0,255,150,.5)}
+  50%{box-shadow:0 0 0 6px rgba(0,255,150,0)}
+}
+.header-date {
+  font-family: var(--mono);
+  font-size: 11px; color: var(--text3); letter-spacing:1px;
+}
+
+/* ── NAV ── */
+.nav {
+  position:fixed; bottom:0; left:0; right:0; z-index:100;
+  background: rgba(5,10,14,.95);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border);
+  display: flex;
+}
+.nav-item {
+  flex:1; padding:12px 0 10px;
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+  cursor:pointer; transition:all .2s; border:none; background:none; color:var(--text3);
+  font-family:var(--sans); font-size:10px; font-weight:600; letter-spacing:.5px;
+}
+.nav-item.active { color:var(--green); }
+.nav-item .ni { font-size:20px; transition:transform .2s; }
+.nav-item.active .ni { filter: drop-shadow(0 0 6px var(--green)); transform:translateY(-2px); }
+
+/* ── SCREENS ── */
+.screen { display:none; position:relative; z-index:1; }
+.screen.active { display:block; }
+
+/* ── DASHBOARD ── */
+.dash { padding:20px; }
+
+/* Score ring */
+.score-section {
+  display:flex; align-items:center; gap:20px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 24px; padding:24px;
+  margin-bottom:20px;
+  position:relative; overflow:hidden;
+}
+.score-section::before {
+  content:''; position:absolute; top:-40px; right:-40px;
+  width:140px; height:140px; border-radius:50%;
+  background: radial-gradient(circle, rgba(0,255,150,.08) 0%, transparent 70%);
+}
+.score-ring-wrap { position:relative; flex-shrink:0; }
+.score-ring-wrap svg { transform:rotate(-90deg); }
+.score-ring-bg { fill:none; stroke:rgba(0,255,150,.1); stroke-width:6; }
+.score-ring-fill {
+  fill:none; stroke:var(--green); stroke-width:6;
+  stroke-linecap:round;
+  stroke-dasharray: 220;
+  stroke-dashoffset: 220;
+  transition: stroke-dashoffset 1.2s cubic-bezier(.34,1.56,.64,1);
+  filter: drop-shadow(0 0 6px var(--green));
+}
+.score-center {
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+}
+.score-num {
+  font-family:var(--mono); font-size:28px; font-weight:700; color:var(--green);
+  line-height:1;
+}
+.score-label { font-size:9px; color:var(--text3); letter-spacing:1px; margin-top:2px; }
+.score-info { flex:1; }
+.score-title { font-size:22px; font-weight:800; margin-bottom:4px; }
+.score-sub { font-size:13px; color:var(--text2); line-height:1.4; }
+.score-tag {
+  display:inline-block; margin-top:10px; padding:4px 12px;
+  background:var(--green-dim); border:1px solid var(--border2);
+  border-radius:20px; font-family:var(--mono); font-size:10px;
+  color:var(--green); letter-spacing:1px;
+}
+
+/* Metric cards grid */
+.metrics-grid {
+  display:grid; grid-template-columns:1fr 1fr;
+  gap:12px; margin-bottom:20px;
+}
+.metric-card {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:var(--radius); padding:16px;
+  cursor:pointer; transition:border-color .2s, transform .15s;
+  position:relative; overflow:hidden;
+}
+.metric-card:hover { border-color:var(--border2); transform:translateY(-1px); }
+.metric-card::after {
+  content:''; position:absolute; bottom:0; left:0; right:0;
+  height:2px; border-radius:0 0 var(--radius) var(--radius);
+}
+.mc-food::after  { background:var(--amber); }
+.mc-sleep::after { background:var(--blue); }
+.mc-move::after  { background:var(--green); }
+.mc-water::after { background:var(--purple); }
+
+.metric-icon { font-size:24px; margin-bottom:8px; }
+.metric-label { font-size:11px; color:var(--text3); font-weight:700; letter-spacing:.5px; text-transform:uppercase; margin-bottom:4px; }
+.metric-val { font-family:var(--mono); font-size:22px; font-weight:700; line-height:1; }
+.metric-val.food  { color:var(--amber); }
+.metric-val.sleep { color:var(--blue); }
+.metric-val.move  { color:var(--green); }
+.metric-val.water { color:var(--purple); }
+.metric-sub { font-size:11px; color:var(--text3); margin-top:3px; }
+.metric-bar-wrap { margin-top:10px; height:3px; background:rgba(255,255,255,.08); border-radius:2px; }
+.metric-bar { height:100%; border-radius:2px; transition:width .8s cubic-bezier(.34,1.56,.64,1); }
+
+/* AI insight card */
+.ai-card {
+  background: linear-gradient(135deg, rgba(0,255,150,.07), rgba(0,200,255,.05));
+  border: 1px solid var(--border2);
+  border-radius:var(--radius); padding:18px;
+  margin-bottom:20px; position:relative;
+}
+.ai-card-header {
+  display:flex; align-items:center; gap:10px; margin-bottom:12px;
+}
+.ai-badge {
+  background:var(--green-dim); border:1px solid var(--border2);
+  border-radius:6px; padding:3px 8px;
+  font-family:var(--mono); font-size:10px; color:var(--green); letter-spacing:1px;
+}
+.ai-card-title { font-size:15px; font-weight:700; }
+.ai-insight-text {
+  font-size:14px; color:var(--text2); line-height:1.6;
+  font-style:italic;
+}
+.ai-insight-text.loading::after {
+  content:''; display:inline-block; width:8px; height:14px;
+  background:var(--green); margin-left:4px;
+  animation: blink .8s step-end infinite;
+  vertical-align:text-bottom;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* Week chart */
+.week-section {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:var(--radius); padding:18px; margin-bottom:20px;
+}
+.section-title {
+  font-size:13px; font-weight:700; letter-spacing:1px;
+  text-transform:uppercase; color:var(--text2); margin-bottom:16px;
+  display:flex; align-items:center; gap:8px;
+}
+.section-title::before {
+  content:''; width:3px; height:14px;
+  background:var(--green); border-radius:2px;
+  display:inline-block;
+}
+.week-bars {
+  display:flex; gap:8px; align-items:flex-end; height:60px;
+}
+.week-bar-wrap { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
+.week-bar {
+  width:100%; border-radius:4px 4px 0 0;
+  transition: height .6s cubic-bezier(.34,1.56,.64,1);
+  background: linear-gradient(to top, var(--green2), var(--green));
+  filter: drop-shadow(0 0 4px rgba(0,255,150,.3));
+  min-height: 4px;
+}
+.week-bar.today { background: linear-gradient(to top, var(--green), #80ffca); }
+.week-day { font-family:var(--mono); font-size:9px; color:var(--text3); }
+
+/* ── LOG SCREEN ── */
+.log-screen { padding:20px; }
+.log-tabs {
+  display:flex; gap:8px; margin-bottom:20px;
+  overflow-x:auto; scrollbar-width:none; padding-bottom:2px;
+}
+.log-tab {
+  flex-shrink:0; padding:8px 16px;
+  border-radius:20px; font-size:12px; font-weight:700; letter-spacing:.5px;
+  cursor:pointer; transition:all .2s; border:1px solid var(--border);
+  background:transparent; color:var(--text2); font-family:var(--sans);
+}
+.log-tab.active { color:var(--bg); background:var(--green); border-color:var(--green); }
+
+.log-panel { display:none; }
+.log-panel.active { display:block; }
+
+.log-form { display:flex; flex-direction:column; gap:12px; }
+.log-group { display:flex; flex-direction:column; gap:6px; }
+.log-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text3); }
+.log-input, .log-select, .log-textarea {
+  background:var(--card2); border:1px solid var(--border);
+  border-radius:10px; padding:12px 14px;
+  color:var(--text); font-family:var(--sans); font-size:14px;
+  width:100%; outline:none; transition:border-color .2s;
+}
+.log-input:focus, .log-select:focus, .log-textarea:focus {
+  border-color:var(--border2);
+}
+.log-input::placeholder, .log-textarea::placeholder { color:var(--text3); }
+.log-textarea { resize:none; height:90px; line-height:1.5; }
+.log-select option { background:var(--bg2); }
+
+.quick-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.chip {
+  padding:6px 12px; border-radius:20px; font-size:12px; font-weight:600;
+  border:1px solid var(--border); background:transparent;
+  color:var(--text2); cursor:pointer; transition:all .15s; font-family:var(--sans);
+}
+.chip:hover, .chip.sel { background:var(--green-dim); border-color:var(--border2); color:var(--green); }
+
+.slider-row { display:flex; align-items:center; gap:12px; }
+.log-slider {
+  -webkit-appearance:none; appearance:none;
+  flex:1; height:4px; border-radius:2px;
+  background: linear-gradient(to right, var(--green) 0%, var(--green) var(--pct,50%), rgba(255,255,255,.1) var(--pct,50%));
+  outline:none; cursor:pointer;
+}
+.log-slider::-webkit-slider-thumb {
+  -webkit-appearance:none; width:18px; height:18px; border-radius:50%;
+  background:var(--green); cursor:pointer;
+  box-shadow:0 0 8px rgba(0,255,150,.5);
+}
+.slider-val { font-family:var(--mono); font-size:14px; color:var(--green); min-width:28px; text-align:right; }
+
+.btn-log {
+  background: linear-gradient(135deg, var(--green), var(--green2));
+  color:#050a0e; font-family:var(--sans); font-size:15px; font-weight:800;
+  border:none; border-radius:12px; padding:14px; cursor:pointer;
+  letter-spacing:.5px; transition:all .2s; margin-top:4px;
+  box-shadow: 0 4px 20px rgba(0,255,150,.3);
+}
+.btn-log:hover { transform:translateY(-1px); box-shadow:0 6px 24px rgba(0,255,150,.4); }
+.btn-log:active { transform:translateY(0); }
+
+/* Log history */
+.log-history { margin-top:24px; }
+.log-entry {
+  display:flex; align-items:flex-start; gap:12px;
+  padding:14px; border-radius:12px;
+  background:var(--card); border:1px solid var(--border);
+  margin-bottom:8px; animation: slide-in .3s ease;
+}
+@keyframes slide-in { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:none} }
+.log-entry-icon { font-size:22px; flex-shrink:0; margin-top:2px; }
+.log-entry-body { flex:1; }
+.log-entry-title { font-size:13px; font-weight:700; margin-bottom:2px; }
+.log-entry-sub { font-size:12px; color:var(--text3); }
+.log-entry-time { font-family:var(--mono); font-size:10px; color:var(--text3); flex-shrink:0; }
+
+/* ── AI SCREEN ── */
+.ai-screen { padding:20px; }
+.ai-chat { display:flex; flex-direction:column; gap:12px; margin-bottom:80px; }
+.chat-msg {
+  max-width:88%; padding:14px 16px; border-radius:16px; font-size:14px; line-height:1.55;
+  animation: slide-in .3s ease;
+}
+.chat-msg.user {
+  align-self:flex-end;
+  background:var(--green-dim); border:1px solid var(--border2); color:var(--text);
+  border-radius:16px 16px 4px 16px;
+}
+.chat-msg.ai {
+  align-self:flex-start;
+  background:var(--card); border:1px solid var(--border); color:var(--text);
+  border-radius:16px 16px 16px 4px;
+}
+.chat-msg.ai .ai-label {
+  font-family:var(--mono); font-size:9px; color:var(--green);
+  letter-spacing:1px; margin-bottom:6px; display:block;
+}
+.chat-input-wrap {
+  position:fixed; bottom:68px; left:0; right:0; z-index:90;
+  padding:12px 16px;
+  background: rgba(5,10,14,.95);
+  backdrop-filter:blur(20px);
+  border-top:1px solid var(--border);
+  display:flex; gap:10px; align-items:flex-end;
+}
+.chat-input {
+  flex:1; background:var(--card2); border:1px solid var(--border);
+  border-radius:12px; padding:12px 14px; color:var(--text);
+  font-family:var(--sans); font-size:14px; outline:none;
+  transition:border-color .2s; resize:none; max-height:100px;
+  line-height:1.4;
+}
+.chat-input:focus { border-color:var(--border2); }
+.chat-input::placeholder { color:var(--text3); }
+.chat-send {
+  width:44px; height:44px; border-radius:12px; flex-shrink:0;
+  background:var(--green); border:none; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  font-size:18px; transition:all .2s;
+  box-shadow:0 2px 12px rgba(0,255,150,.3);
+}
+.chat-send:hover { transform:scale(1.05); }
+.chat-send:disabled { opacity:.4; cursor:default; transform:none; }
+
+.quick-prompts { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+.qp {
+  padding:8px 14px; border-radius:20px; font-size:12px; font-weight:600;
+  border:1px solid var(--border); background:var(--card);
+  color:var(--text2); cursor:pointer; transition:all .15s; font-family:var(--sans);
+}
+.qp:hover { border-color:var(--border2); color:var(--green); }
+
+/* ── STATS SCREEN ── */
+.stats-screen { padding:20px; }
+.stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+.stat-card {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:var(--radius); padding:18px; text-align:center;
+}
+.stat-card-val { font-family:var(--mono); font-size:32px; font-weight:700; line-height:1; margin-bottom:4px; }
+.stat-card-label { font-size:11px; color:var(--text3); font-weight:700; letter-spacing:.5px; text-transform:uppercase; }
+.stat-card-trend { font-size:12px; margin-top:6px; }
+
+.habit-list { margin-bottom:20px; }
+.habit-item {
+  display:flex; align-items:center; gap:14px;
+  padding:14px; border-radius:12px;
+  background:var(--card); border:1px solid var(--border);
+  margin-bottom:8px;
+}
+.habit-icon { font-size:20px; }
+.habit-body { flex:1; }
+.habit-name { font-size:14px; font-weight:700; margin-bottom:4px; }
+.habit-streak-bar { display:flex; gap:3px; }
+.hb { width:14px; height:14px; border-radius:3px; background:rgba(255,255,255,.07); }
+.hb.done { background:var(--green); box-shadow:0 0 4px rgba(0,255,150,.4); }
+.habit-streak { font-family:var(--mono); font-size:12px; color:var(--green); margin-left:auto; }
+
+/* ── TOAST ── */
+.toast {
+  position:fixed; bottom:90px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--card2); border:1px solid var(--border2);
+  border-radius:10px; padding:10px 20px;
+  font-size:13px; font-weight:600; color:var(--green);
+  font-family:var(--mono); letter-spacing:.5px;
+  opacity:0; transition:all .3s; z-index:200; white-space:nowrap;
+}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width:4px; height:4px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-logo">
+    <div class="header-logo-dot"></div>
+    VITALIS
+  </div>
+  <div class="header-date" id="headerDate">—</div>
+</div>
+
+<!-- SCREENS -->
+
+<!-- DASHBOARD -->
+<div class="screen active" id="dashScreen">
+  <div class="dash">
+
+    <div class="score-section" id="scoreSection">
+      <div class="score-ring-wrap">
+        <svg width="90" height="90" viewBox="0 0 90 90">
+          <circle class="score-ring-bg" cx="45" cy="45" r="35"/>
+          <circle class="score-ring-fill" id="scoreRing" cx="45" cy="45" r="35"/>
+        </svg>
+        <div class="score-center">
+          <div class="score-num" id="scoreNum">—</div>
+          <div class="score-label">VITALS</div>
+        </div>
+      </div>
+      <div class="score-info">
+        <div class="score-title" id="scoreTitle">Добро пожаловать</div>
+        <div class="score-sub" id="scoreSub">Заполни дневник чтобы получить оценку здоровья</div>
+        <div class="score-tag" id="scoreTag">◎ АНАЛИЗ</div>
+      </div>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric-card mc-food" onclick="switchTo('logScreen');setTab('food')">
+        <div class="metric-icon">🍽</div>
+        <div class="metric-label">Питание</div>
+        <div class="metric-val food" id="mFood">— ккал</div>
+        <div class="metric-sub" id="mFoodSub">нет данных</div>
+        <div class="metric-bar-wrap"><div class="metric-bar" id="mFoodBar" style="width:0%;background:var(--amber)"></div></div>
+      </div>
+      <div class="metric-card mc-sleep" onclick="switchTo('logScreen');setTab('sleep')">
+        <div class="metric-icon">🌙</div>
+        <div class="metric-label">Сон</div>
+        <div class="metric-val sleep" id="mSleep">— ч</div>
+        <div class="metric-sub" id="mSleepSub">нет данных</div>
+        <div class="metric-bar-wrap"><div class="metric-bar" id="mSleepBar" style="width:0%;background:var(--blue)"></div></div>
+      </div>
+      <div class="metric-card mc-move" onclick="switchTo('logScreen');setTab('move')">
+        <div class="metric-icon">⚡</div>
+        <div class="metric-label">Активность</div>
+        <div class="metric-val move" id="mMove">— мин</div>
+        <div class="metric-sub" id="mMoveSub">нет данных</div>
+        <div class="metric-bar-wrap"><div class="metric-bar" id="mMoveBar" style="width:0%;background:var(--green)"></div></div>
+      </div>
+      <div class="metric-card mc-water" onclick="switchTo('logScreen');setTab('water')">
+        <div class="metric-icon">💧</div>
+        <div class="metric-label">Вода</div>
+        <div class="metric-val water" id="mWater">— л</div>
+        <div class="metric-sub" id="mWaterSub">нет данных</div>
+        <div class="metric-bar-wrap"><div class="metric-bar" id="mWaterBar" style="width:0%;background:var(--purple)"></div></div>
+      </div>
+    </div>
+
+    <div class="ai-card" id="aiInsightCard">
+      <div class="ai-card-header">
+        <span class="ai-badge">AI АНАЛИЗ</span>
+        <span class="ai-card-title">Персональный совет</span>
+      </div>
+      <div class="ai-insight-text" id="aiInsightText">Добавь данные о питании, сне и активности, чтобы получить персональный AI-анализ твоего здоровья.</div>
+    </div>
+
+    <div class="week-section">
+      <div class="section-title">Активность за неделю</div>
+      <div class="week-bars" id="weekBars"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- LOG -->
+<div class="screen" id="logScreen">
+  <div class="log-screen">
+    <div class="log-tabs">
+      <button class="log-tab active" onclick="setTab('food')" id="tab-food">🍽 Питание</button>
+      <button class="log-tab" onclick="setTab('sleep')" id="tab-sleep">🌙 Сон</button>
+      <button class="log-tab" onclick="setTab('move')" id="tab-move">⚡ Активность</button>
+      <button class="log-tab" onclick="setTab('water')" id="tab-water">💧 Вода</button>
+      <button class="log-tab" onclick="setTab('mood')" id="tab-mood">😊 Настроение</button>
+    </div>
+
+    <!-- FOOD -->
+    <div class="log-panel active" id="panel-food">
+      <div class="log-form">
+        <div class="log-group">
+          <div class="log-label">Быстрый выбор</div>
+          <div class="quick-chips" id="food-chips">
+            <button class="chip" onclick="addFood('Завтрак',400)">🥣 Завтрак ~400</button>
+            <button class="chip" onclick="addFood('Обед',600)">🍲 Обед ~600</button>
+            <button class="chip" onclick="addFood('Ужин',500)">🍽 Ужин ~500</button>
+            <button class="chip" onclick="addFood('Перекус',150)">🍎 Перекус ~150</button>
+            <button class="chip" onclick="addFood('Кофе',50)">☕ Кофе ~50</button>
+            <button class="chip" onclick="addFood('Протеин',200)">💪 Протеин ~200</button>
+          </div>
+        </div>
+        <div class="log-group">
+          <div class="log-label">Описание</div>
+          <textarea class="log-textarea" id="foodDesc" placeholder="Что ел? Гречка с курицей, салат, стакан кефира..."></textarea>
+        </div>
+        <div class="log-group">
+          <div class="log-label">Калории (примерно)</div>
+          <div class="slider-row">
+            <input type="range" class="log-slider" id="foodKcal" min="50" max="1200" value="400"
+              oninput="this.style.setProperty('--pct',((this.value-50)/(1200-50)*100)+'%');document.getElementById('foodKcalVal').textContent=this.value">
+            <span class="slider-val" id="foodKcalVal">400</span>
+          </div>
+        </div>
+        <button class="btn-log" onclick="logFood()">＋ Записать приём пищи</button>
+      </div>
+      <div class="log-history" id="foodHistory"></div>
+    </div>
+
+    <!-- SLEEP -->
+    <div class="log-panel" id="panel-sleep">
+      <div class="log-form">
+        <div class="log-group">
+          <div class="log-label">Время отхода ко сну</div>
+          <input type="time" class="log-input" id="sleepStart" value="23:00">
+        </div>
+        <div class="log-group">
+          <div class="log-label">Время пробуждения</div>
+          <input type="time" class="log-input" id="sleepEnd" value="07:00">
+        </div>
+        <div class="log-group">
+          <div class="log-label">Качество сна</div>
+          <div class="slider-row">
+            <input type="range" class="log-slider" id="sleepQuality" min="1" max="10" value="7"
+              oninput="this.style.setProperty('--pct',((this.value-1)/9*100)+'%');document.getElementById('sleepQVal').textContent=this.value">
+            <span class="slider-val" id="sleepQVal">7</span>
+          </div>
+        </div>
+        <div class="log-group">
+          <div class="log-label">Заметки</div>
+          <input type="text" class="log-input" id="sleepNote" placeholder="Снились сны, долго засыпал...">
+        </div>
+        <button class="btn-log" onclick="logSleep()">＋ Записать сон</button>
+      </div>
+      <div class="log-history" id="sleepHistory"></div>
+    </div>
+
+    <!-- MOVE -->
+    <div class="log-panel" id="panel-move">
+      <div class="log-form">
+        <div class="log-group">
+          <div class="log-label">Тип активности</div>
+          <div class="quick-chips">
+            <button class="chip" id="act-walk" onclick="selectAct('Прогулка','🚶')">🚶 Прогулка</button>
+            <button class="chip" id="act-run" onclick="selectAct('Бег','🏃')">🏃 Бег</button>
+            <button class="chip" id="act-gym" onclick="selectAct('Тренажёрный зал','🏋')">🏋 Зал</button>
+            <button class="chip" id="act-bike" onclick="selectAct('Велосипед','🚴')">🚴 Велик</button>
+            <button class="chip" id="act-swim" onclick="selectAct('Плавание','🏊')">🏊 Плавание</button>
+            <button class="chip" id="act-yoga" onclick="selectAct('Йога','🧘')">🧘 Йога</button>
+            <button class="chip" id="act-stretch" onclick="selectAct('Растяжка','🤸')">🤸 Растяжка</button>
+            <button class="chip" id="act-other" onclick="selectAct('Другое','⚡')">⚡ Другое</button>
+          </div>
+        </div>
+        <div class="log-group">
+          <div class="log-label">Длительность (минуты)</div>
+          <div class="slider-row">
+            <input type="range" class="log-slider" id="actDuration" min="5" max="120" value="30"
+              oninput="this.style.setProperty('--pct',((this.value-5)/115*100)+'%');document.getElementById('actDurVal').textContent=this.value">
+            <span class="slider-val" id="actDurVal">30</span>
+          </div>
+        </div>
+        <div class="log-group">
+          <div class="log-label">Интенсивность</div>
+          <div class="slider-row">
+            <input type="range" class="log-slider" id="actIntensity" min="1" max="10" value="5"
+              oninput="this.style.setProperty('--pct',((this.value-1)/9*100)+'%');document.getElementById('actIntVal').textContent=this.value">
+            <span class="slider-val" id="actIntVal">5</span>
+          </div>
+        </div>
+        <button class="btn-log" onclick="logMove()">＋ Записать тренировку</button>
+      </div>
+      <div class="log-history" id="moveHistory"></div>
+    </div>
+
+    <!-- WATER -->
+    <div class="log-panel" id="panel-water">
+      <div class="log-form">
+        <div class="log-group">
+          <div class="log-label">Быстро добавить</div>
+          <div class="quick-chips">
+            <button class="chip" onclick="addWater(0.2)">💧 200 мл</button>
+            <button class="chip" onclick="addWater(0.3)">💧 300 мл</button>
+            <button class="chip" onclick="addWater(0.5)">🫗 500 мл</button>
+            <button class="chip" onclick="addWater(1.0)">🍶 1 литр</button>
+          </div>
+        </div>
+        <div class="log-group">
+          <div class="log-label">Или введи вручную (литры)</div>
+          <div class="slider-row">
+            <input type="range" class="log-slider" id="waterAmount" min="0.1" max="2" step="0.1" value="0.5"
+              oninput="this.style.setProperty('--pct',((this.value-0.1)/1.9*100)+'%');document.getElementById('waterVal').textContent=parseFloat(this.value).toFixed(1)">
+            <span class="slider-val" id="waterVal">0.5</span>
+          </div>
+        </div>
+        <button class="btn-log" onclick="logWater()">＋ Записать воду</button>
+      </div>
+      <div class="log-history" id="waterHistory"></div>
+    </div>
+
+    <!-- MOOD -->
+    <div class="log-panel" id="panel-mood">
+      <div class="log-form">
+        <div class="log-group">
+          <div class="log-label">Как себя чувствуешь?</div>
+          <div class="quick-chips" id="mood-chips">
+            <button class="chip" onclick="selectMood('Отлично','🤩')">🤩 Отлично</button>
+            <button class="chip" onclick="selectMood('Хорошо','😊')">😊 Хорошо</button>
+            <button class="chip" onclick="selectMood('Нормально','😐')">😐 Нормально</button>
+            <button class="chip" onclick="selectMood('Устал','😔')">😔 Устал</button>
+            <button class="chip" onclick="selectMood('Плохо','😞')">😞 Плохо</button>
+            <button class="chip" onclick="selectMood('Стресс','😤')">😤 Стресс</button>
+          </div>
+        </div>
+        <div class="log-group">
+          <div class="log-label">Уровень энергии</div>
+          <div class="slider-row">
+            <input type="range" class="log-slider" id="energyLevel" min="1" max="10" value="6"
+              oninput="this.style.setProperty('--pct',((this.value-1)/9*100)+'%');document.getElementById('energyVal').textContent=this.value">
+            <span class="slider-val" id="energyVal">6</span>
+          </div>
+        </div>
+        <div class="log-group">
+          <div class="log-label">Заметка</div>
+          <textarea class="log-textarea" id="moodNote" placeholder="Что повлияло на настроение сегодня?"></textarea>
+        </div>
+        <button class="btn-log" onclick="logMood()">＋ Записать настроение</button>
+      </div>
+      <div class="log-history" id="moodHistory"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- AI CHAT -->
+<div class="screen" id="aiScreen">
+  <div class="ai-screen">
+    <div class="quick-prompts">
+      <button class="qp" onclick="sendQuick('Проанализируй моё питание сегодня')">🍽 Питание</button>
+      <button class="qp" onclick="sendQuick('Как улучшить мой сон?')">🌙 Сон</button>
+      <button class="qp" onclick="sendQuick('Дай план тренировок на неделю')">💪 Тренировки</button>
+      <button class="qp" onclick="sendQuick('Как повысить энергию в течение дня?')">⚡ Энергия</button>
+      <button class="qp" onclick="sendQuick('Проанализируй все мои данные и дай общий отчёт')">📊 Полный отчёт</button>
+    </div>
+    <div class="ai-chat" id="aiChat"></div>
+  </div>
+  <div class="chat-input-wrap">
+    <textarea class="chat-input" id="chatInput" placeholder="Спроси об здоровье, питании, тренировках..." rows="1"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"
+      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+    <button class="chat-send" id="chatSendBtn" onclick="sendChat()">↑</button>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="screen" id="statsScreen">
+  <div class="stats-screen">
+    <div class="stats-grid" id="statsGrid"></div>
+    <div class="section-title" style="margin-bottom:16px">Привычки (7 дней)</div>
+    <div class="habit-list" id="habitList"></div>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav class="nav">
+  <button class="nav-item active" id="nav-dash" onclick="switchTo('dashScreen')">
+    <span class="ni">◈</span>Дашборд
+  </button>
+  <button class="nav-item" id="nav-log" onclick="switchTo('logScreen')">
+    <span class="ni">＋</span>Дневник
+  </button>
+  <button class="nav-item" id="nav-ai" onclick="switchTo('aiScreen')">
+    <span class="ni">◎</span>AI Коуч
+  </button>
+  <button class="nav-item" id="nav-stats" onclick="switchTo('statsScreen');renderStats()">
+    <span class="ni">▦</span>Статистика
+  </button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────
+const API_KEY_STORE = 'vitalis_apikey';
+let state = JSON.parse(localStorage.getItem('vitalis_state') || 'null') || {
+  logs: [], // {type, data, ts}
+  apiKey: '',
+};
+function save() { localStorage.setItem('vitalis_state', JSON.stringify(state)); }
+
+// ── INIT ──────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  // Date header
+  const now = new Date();
+  document.getElementById('headerDate').textContent =
+    now.toLocaleDateString('ru-RU', {weekday:'short', day:'numeric', month:'short'}).toUpperCase();
+
+  initSliders();
+  renderDash();
+  renderWeek();
+  renderHistories();
+  askApiKeyIfNeeded();
+});
+
+function initSliders() {
+  document.querySelectorAll('.log-slider').forEach(s => {
+    const min = +s.min, max = +s.max, val = +s.value;
+    s.style.setProperty('--pct', ((val - min) / (max - min) * 100) + '%');
+  });
+}
+
+// ── NAVIGATION ────────────────────────────────────────────
+function switchTo(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const map = {dashScreen:'nav-dash',logScreen:'nav-log',aiScreen:'nav-ai',statsScreen:'nav-stats'};
+  if (map[id]) document.getElementById(map[id]).classList.add('active');
+  if (id === 'dashScreen') renderDash();
+}
+
+function setTab(name) {
+  document.querySelectorAll('.log-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.log-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.getElementById('panel-'+name).classList.add('active');
+}
+
+// ── TODAY HELPERS ─────────────────────────────────────────
+function todayStr() { return new Date().toISOString().slice(0,10); }
+function todayLogs() { return state.logs.filter(l => l.ts.startsWith(todayStr())); }
+
+function todaySum(type, field) {
+  return todayLogs().filter(l => l.type === type)
+    .reduce((s, l) => s + (l.data[field] || 0), 0);
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────
+function renderDash() {
+  const kcal = todaySum('food','kcal');
+  const sleep = todayLogs().filter(l => l.type==='sleep').reduce((s,l)=>{
+    const [h1,m1] = l.data.start.split(':').map(Number);
+    const [h2,m2] = l.data.end.split(':').map(Number);
+    let mins = (h2*60+m2) - (h1*60+m1);
+    if (mins < 0) mins += 24*60;
+    return s + mins/60;
+  }, 0);
+  const move = todaySum('move','duration');
+  const water = todayLogs().filter(l=>l.type==='water')
+    .reduce((s,l)=>s+(l.data.amount||0),0);
+
+  const fl = (v,u,dflt) => v > 0 ? `${v.toFixed(v%1?1:0)} ${u}` : dflt;
+
+  document.getElementById('mFood').textContent = kcal > 0 ? `${kcal} ккал` : '— ккал';
+  document.getElementById('mFoodSub').textContent = kcal > 0 ? (kcal < 1200 ? 'мало' : kcal < 2200 ? 'норма' : 'много') : 'нет данных';
+  document.getElementById('mFoodBar').style.width = Math.min(kcal/2000*100, 100) + '%';
+
+  document.getElementById('mSleep').textContent = sleep > 0 ? `${sleep.toFixed(1)} ч` : '— ч';
+  document.getElementById('mSleepSub').textContent = sleep > 0 ? (sleep < 6 ? 'мало' : sleep < 9 ? 'норма' : 'много') : 'нет данных';
+  document.getElementById('mSleepBar').style.width = Math.min(sleep/9*100, 100) + '%';
+
+  document.getElementById('mMove').textContent = move > 0 ? `${move} мин` : '— мин';
+  document.getElementById('mMoveSub').textContent = move > 0 ? (move < 20 ? 'мало' : move < 60 ? 'норма' : 'отлично!') : 'нет данных';
+  document.getElementById('mMoveBar').style.width = Math.min(move/60*100, 100) + '%';
+
+  document.getElementById('mWater').textContent = water > 0 ? `${water.toFixed(1)} л` : '— л';
+  document.getElementById('mWaterSub').textContent = water > 0 ? (water < 1.5 ? 'пей больше' : water < 3 ? 'норма' : 'отлично!') : 'нет данных';
+  document.getElementById('mWaterBar').style.width = Math.min(water/2.5*100, 100) + '%';
+
+  // Score
+  let score = 0, factors = 0;
+  if (kcal > 0)   { score += Math.min(kcal/2000, 1) > 0.4 && Math.min(kcal/2000,1) < 1.2 ? 25 : 12; factors++; }
+  if (sleep > 0)  { score += sleep >= 6 && sleep <= 9 ? 25 : 12; factors++; }
+  if (move > 0)   { score += Math.min(move/30, 1) * 25; factors++; }
+  if (water > 0)  { score += Math.min(water/2, 1) * 25; factors++; }
+
+  const finalScore = factors > 0 ? Math.round(score) : 0;
+  document.getElementById('scoreNum').textContent = finalScore || '—';
+
+  const circumference = 2 * Math.PI * 35;
+  const ring = document.getElementById('scoreRing');
+  ring.style.strokeDashoffset = finalScore
+    ? circumference - (finalScore / 100) * circumference
+    : circumference;
+
+  if (finalScore >= 80) {
+    document.getElementById('scoreTitle').textContent = 'Отличный день! 🔥';
+    document.getElementById('scoreSub').textContent = 'Твои показатели здоровья выше нормы';
+    document.getElementById('scoreTag').textContent = '✓ ЦЕЛИ ДОСТИГНУТЫ';
+  } else if (finalScore >= 50) {
+    document.getElementById('scoreTitle').textContent = 'Хороший прогресс';
+    document.getElementById('scoreSub').textContent = 'Ещё немного — и день будет идеальным';
+    document.getElementById('scoreTag').textContent = '◎ В НОРМЕ';
+  } else if (finalScore > 0) {
+    document.getElementById('scoreTitle').textContent = 'Есть куда расти';
+    document.getElementById('scoreSub').textContent = 'Добавь активность или попей воды';
+    document.getElementById('scoreTag').textContent = '△ НУЖНО БОЛЬШЕ';
+  } else {
+    document.getElementById('scoreTitle').textContent = 'Начни отслеживать';
+    document.getElementById('scoreSub').textContent = 'Заполни дневник чтобы видеть свой прогресс';
+    document.getElementById('scoreTag').textContent = '◎ ГОТОВ К СТАРТУ';
+  }
+}
+
+function renderWeek() {
+  const days = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+  const today = new Date();
+  const bars = document.getElementById('weekBars');
+  bars.innerHTML = '';
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const ds = d.toISOString().slice(0,10);
+    const dayLogs = state.logs.filter(l => l.ts.startsWith(ds));
+    const move = dayLogs.filter(l=>l.type==='move').reduce((s,l)=>s+(l.data.duration||0),0);
+    const h = Math.max(4, Math.min(56, move / 60 * 56));
+    const isToday = i === 0;
+
+    bars.innerHTML += `
+      <div class="week-bar-wrap">
+        <div class="week-bar ${isToday?'today':''}" style="height:${h}px"></div>
+        <div class="week-day">${days[d.getDay()===0?6:d.getDay()-1]}</div>
+      </div>`;
+  }
+}
+
+// ── LOGGING ───────────────────────────────────────────────
+let selectedAct = {name:'Прогулка', icon:'🚶'};
+let selectedMood = {name:'Хорошо', icon:'😊'};
+
+function addFood(name, kcal) {
+  state.logs.push({type:'food', data:{name, kcal}, ts: new Date().toISOString()});
+  save(); toast(`+${kcal} ккал: ${name}`); renderDash(); renderHistories();
+  autoInsight();
+}
+
+function logFood() {
+  const desc = document.getElementById('foodDesc').value.trim() || 'Приём пищи';
+  const kcal = +document.getElementById('foodKcal').value;
+  state.logs.push({type:'food', data:{name:desc, kcal}, ts: new Date().toISOString()});
+  document.getElementById('foodDesc').value = '';
+  save(); toast('Питание записано ✓'); renderDash(); renderHistories();
+  autoInsight();
+}
+
+function logSleep() {
+  const start = document.getElementById('sleepStart').value;
+  const end = document.getElementById('sleepEnd').value;
+  const quality = +document.getElementById('sleepQuality').value;
+  const note = document.getElementById('sleepNote').value;
+  state.logs.push({type:'sleep', data:{start,end,quality,note}, ts: new Date().toISOString()});
+  document.getElementById('sleepNote').value = '';
+  save(); toast('Сон записан ✓'); renderDash(); renderHistories();
+  autoInsight();
+}
+
+function selectAct(name, icon) {
+  selectedAct = {name, icon};
+  document.querySelectorAll('[id^="act-"]').forEach(c => c.classList.remove('sel'));
+  const key = Object.entries({walk:'Прогулка',run:'Бег',gym:'Тренажёрный зал',bike:'Велосипед',swim:'Плавание',yoga:'Йога',stretch:'Растяжка',other:'Другое'})
+    .find(([k,v]) => v===name)?.[0];
+  if (key) document.getElementById('act-'+key)?.classList.add('sel');
+}
+
+function logMove() {
+  const duration = +document.getElementById('actDuration').value;
+  const intensity = +document.getElementById('actIntensity').value;
+  state.logs.push({type:'move', data:{name:selectedAct.name, icon:selectedAct.icon, duration, intensity}, ts: new Date().toISOString()});
+  save(); toast('Активность записана ✓'); renderDash(); renderWeek(); renderHistories();
+  autoInsight();
+}
+
+function addWater(amount) {
+  state.logs.push({type:'water', data:{amount}, ts: new Date().toISOString()});
+  save(); toast(`+${amount} л воды ✓`); renderDash(); renderHistories();
+}
+
+function logWater() {
+  const amount = +document.getElementById('waterAmount').value;
+  addWater(amount);
+}
+
+function selectMood(name, icon) {
+  selectedMood = {name, icon};
+  document.querySelectorAll('#mood-chips .chip').forEach(c => c.classList.remove('sel'));
+  event.target.classList.add('sel');
+}
+
+function logMood() {
+  const energy = +document.getElementById('energyLevel').value;
+  const note = document.getElementById('moodNote').value.trim();
+  state.logs.push({type:'mood', data:{name:selectedMood.name, icon:selectedMood.icon, energy, note}, ts: new Date().toISOString()});
+  document.getElementById('moodNote').value = '';
+  save(); toast('Настроение записано ✓'); renderHistories();
+}
+
+// ── HISTORY ───────────────────────────────────────────────
+function renderHistories() {
+  renderHistory('foodHistory', 'food', l => ({
+    icon:'🍽', title:`${l.data.name}`, sub:`${l.data.kcal} ккал`
+  }));
+  renderHistory('sleepHistory', 'sleep', l => {
+    const [h1,m1] = l.data.start.split(':').map(Number);
+    const [h2,m2] = l.data.end.split(':').map(Number);
+    let mins = (h2*60+m2) - (h1*60+m1);
+    if (mins < 0) mins += 24*60;
+    return {icon:'🌙', title:`${l.data.start} → ${l.data.end}`, sub:`${(mins/60).toFixed(1)} ч • Качество: ${l.data.quality}/10`};
+  });
+  renderHistory('moveHistory', 'move', l => ({
+    icon:l.data.icon, title:l.data.name, sub:`${l.data.duration} мин • интенсивность: ${l.data.intensity}/10`
+  }));
+  renderHistory('waterHistory', 'water', l => ({
+    icon:'💧', title:`${l.data.amount} л`, sub:'вода'
+  }));
+  renderHistory('moodHistory', 'mood', l => ({
+    icon:l.data.icon, title:l.data.name, sub:`Энергия: ${l.data.energy}/10${l.data.note?' • '+l.data.note:''}`
+  }));
+}
+
+function renderHistory(containerId, type, mapper) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const entries = todayLogs().filter(l => l.type === type).reverse();
+  if (!entries.length) { container.innerHTML = ''; return; }
+  container.innerHTML = `<div class="section-title" style="margin-bottom:12px">Сегодня</div>` +
+    entries.map(l => {
+      const m = mapper(l);
+      const t = new Date(l.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+      return `<div class="log-entry">
+        <div class="log-entry-icon">${m.icon}</div>
+        <div class="log-entry-body">
+          <div class="log-entry-title">${m.title}</div>
+          <div class="log-entry-sub">${m.sub}</div>
+        </div>
+        <div class="log-entry-time">${t}</div>
+      </div>`;
+    }).join('');
+}
+
+// ── AI INSIGHT (AUTO) ─────────────────────────────────────
+let insightTimeout;
+function autoInsight() {
+  clearTimeout(insightTimeout);
+  insightTimeout = setTimeout(generateInsight, 2000);
+}
+
+async function generateInsight() {
+  if (!state.apiKey) return;
+  const logs = todayLogs();
+  if (!logs.length) return;
+
+  const kcal = logs.filter(l=>l.type==='food').reduce((s,l)=>s+l.data.kcal,0);
+  const sleep = logs.filter(l=>l.type==='sleep');
+  const move = logs.filter(l=>l.type==='move').reduce((s,l)=>s+l.data.duration,0);
+  const water = logs.filter(l=>l.type==='water').reduce((s,l)=>s+l.data.amount,0);
+
+  const summary = [
+    kcal ? `Калории: ${kcal} ккал` : '',
+    sleep.length ? `Сон: ${sleep.map(s=>`${s.data.start}-${s.data.end} (кач.${s.data.quality}/10)`).join(', ')}` : '',
+    move ? `Активность: ${move} мин` : '',
+    water ? `Вода: ${water.toFixed(1)} л` : '',
+  ].filter(Boolean).join('; ');
+
+  const el = document.getElementById('aiInsightText');
+  el.className = 'ai-insight-text loading';
+  el.textContent = 'Анализирую...';
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:150,
+        system:'Ты персональный AI коуч по здоровью. Давай краткие (1-2 предложения), конкретные, мотивирующие советы на русском языке на основе данных пользователя. Будь как хороший тренер — честно, конкретно, с заботой.',
+        messages:[{role:'user',content:`Данные за сегодня: ${summary}. Дай короткий персональный совет.`}]
+      })
+    });
+    const data = await res.json();
+    el.className = 'ai-insight-text';
+    el.textContent = data.content?.[0]?.text || 'Продолжай в том же духе!';
+  } catch {
+    el.className = 'ai-insight-text';
+    el.textContent = 'Отличные данные! Продолжай вести дневник.';
+  }
+}
+
+// ── AI CHAT ───────────────────────────────────────────────
+const chatHistory = [];
+
+function buildContext() {
+  const logs = state.logs.slice(-30);
+  if (!logs.length) return 'Пользователь только начинает отслеживать здоровье.';
+  const grouped = {};
+  logs.forEach(l => {
+    const d = l.ts.slice(0,10);
+    if (!grouped[d]) grouped[d] = [];
+    grouped[d].push(l);
+  });
+  return Object.entries(grouped).slice(-7).map(([date, dayLogs]) => {
+    const kcal = dayLogs.filter(l=>l.type==='food').reduce((s,l)=>s+l.data.kcal,0);
+    const move = dayLogs.filter(l=>l.type==='move').reduce((s,l)=>s+l.data.duration,0);
+    const water = dayLogs.filter(l=>l.type==='water').reduce((s,l)=>s+l.data.amount,0);
+    const sleep = dayLogs.filter(l=>l.type==='sleep');
+    return `${date}: ккал=${kcal}, активность=${move}мин, вода=${water.toFixed(1)}л` +
+      (sleep.length ? `, сон=${sleep[0].data.start}-${sleep[0].data.end}` : '');
+  }).join('\n');
+}
+
+async function sendChat(msgOverride) {
+  const input = document.getElementById('chatInput');
+  const msg = msgOverride || input.value.trim();
+  if (!msg) return;
+  if (!msgOverride) input.value = '';
+  input.style.height = 'auto';
+
+  if (!state.apiKey) {
+    askApiKey(); return;
+  }
+
+  appendMsg(msg, 'user');
+  chatHistory.push({role:'user', content:msg});
+
+  const btn = document.getElementById('chatSendBtn');
+  btn.disabled = true;
+
+  const aiEl = appendMsg('', 'ai');
+  aiEl.querySelector('.ai-label').textContent = 'VITALIS AI ◎';
+  const textEl = aiEl.querySelector('.ai-text');
+  textEl.className = 'ai-insight-text loading';
+  textEl.textContent = '';
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:800,
+        system:`Ты Vitalis — персональный AI коуч по здоровью и фитнесу. Говоришь по-русски. Анализируешь данные пользователя о питании, сне, активности и даёшь конкретные, научно обоснованные советы. Ты заботливый, мотивирующий, без лишней воды. Используй эмодзи умеренно.\n\nДанные пользователя за последние 7 дней:\n${buildContext()}`,
+        messages: chatHistory
+      })
+    });
+    const data = await res.json();
+    const reply = data.content?.[0]?.text || 'Не удалось получить ответ.';
+    textEl.className = '';
+    textEl.textContent = reply;
+    chatHistory.push({role:'assistant', content:reply});
+  } catch(e) {
+    textEl.className = '';
+    textEl.textContent = 'Ошибка соединения. Проверь API ключ.';
+  }
+  btn.disabled = false;
+  scrollChatDown();
+}
+
+function appendMsg(text, role) {
+  const chat = document.getElementById('aiChat');
+  const div = document.createElement('div');
+  div.className = `chat-msg ${role}`;
+  if (role === 'ai') {
+    div.innerHTML = `<span class="ai-label">VITALIS AI ◎</span><span class="ai-text">${text}</span>`;
+  } else {
+    div.textContent = text;
+  }
+  chat.appendChild(div);
+  scrollChatDown();
+  return div;
+}
+
+function scrollChatDown() {
+  setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 50);
+}
+
+function sendQuick(msg) { switchTo('aiScreen'); setTimeout(() => sendChat(msg), 100); }
+
+// ── STATS ─────────────────────────────────────────────────
+function renderStats() {
+  const all = state.logs;
+  const days7 = [];
+  for (let i=0;i<7;i++) {
+    const d = new Date(); d.setDate(d.getDate()-i);
+    days7.push(d.toISOString().slice(0,10));
+  }
+
+  const totalKcal = all.filter(l=>l.type==='food').reduce((s,l)=>s+l.data.kcal,0);
+  const totalMove = all.filter(l=>l.type==='move').reduce((s,l)=>s+l.data.duration,0);
+  const totalWater = all.filter(l=>l.type==='water').reduce((s,l)=>s+l.data.amount,0);
+  const avgSleep = (() => {
+    const sl = all.filter(l=>l.type==='sleep');
+    if (!sl.length) return 0;
+    return sl.reduce((s,l) => {
+      const [h1,m1] = l.data.start.split(':').map(Number);
+      const [h2,m2] = l.data.end.split(':').map(Number);
+      let mins = (h2*60+m2)-(h1*60+m1);
+      if(mins<0)mins+=24*60;
+      return s+mins/60;
+    },0) / sl.length;
+  })();
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-card-val" style="color:var(--amber)">${totalKcal.toLocaleString()}</div>
+      <div class="stat-card-label">Всего ккал</div>
+      <div class="stat-card-trend" style="color:var(--text3)">за всё время</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-val" style="color:var(--green)">${Math.round(totalMove/60*10)/10}</div>
+      <div class="stat-card-label">Часов активности</div>
+      <div class="stat-card-trend" style="color:var(--text3)">${totalMove} минут</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-val" style="color:var(--purple)">${totalWater.toFixed(1)}</div>
+      <div class="stat-card-label">Литров воды</div>
+      <div class="stat-card-trend" style="color:var(--text3)">за всё время</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-val" style="color:var(--blue)">${avgSleep ? avgSleep.toFixed(1) : '—'}</div>
+      <div class="stat-card-label">Средний сон (ч)</div>
+      <div class="stat-card-trend" style="color:${avgSleep>=7?'var(--green)':'var(--amber)'}">
+        ${avgSleep>=7?'✓ норма':'△ мало'}
+      </div>
+    </div>`;
+
+  const habits = [
+    {name:'Активность', icon:'⚡', type:'move', check: d => state.logs.some(l=>l.ts.startsWith(d)&&l.type==='move')},
+    {name:'Вода 1.5л+', icon:'💧', type:'water', check: d => state.logs.filter(l=>l.ts.startsWith(d)&&l.type==='water').reduce((s,l)=>s+l.data.amount,0)>=1.5},
+    {name:'Питание', icon:'🍽', type:'food', check: d => state.logs.some(l=>l.ts.startsWith(d)&&l.type==='food')},
+    {name:'Сон записан', icon:'🌙', type:'sleep', check: d => state.logs.some(l=>l.ts.startsWith(d)&&l.type==='sleep')},
+  ];
+
+  document.getElementById('habitList').innerHTML = habits.map(h => {
+    const done = days7.filter(d => h.check(d));
+    const streak = done.filter((d,i) => {
+      const expected = new Date(); expected.setDate(expected.getDate()-i);
+      return d === expected.toISOString().slice(0,10);
+    }).length;
+    return `<div class="habit-item">
+      <div class="habit-icon">${h.icon}</div>
+      <div class="habit-body">
+        <div class="habit-name">${h.name}</div>
+        <div class="habit-streak-bar">
+          ${days7.map(d => `<div class="hb ${h.check(d)?'done':''}"></div>`).join('')}
+        </div>
+      </div>
+      <div class="habit-streak">${streak}🔥</div>
+    </div>`;
+  }).join('');
+}
+
+// ── API KEY ───────────────────────────────────────────────
+function askApiKeyIfNeeded() {
+  if (!state.apiKey) {
+    setTimeout(() => {
+      const key = prompt('Введи OpenRouter API ключ (sk-or-...) для AI-анализа:\n\nОставь пустым чтобы пропустить:');
+      if (key && key.trim()) { state.apiKey = key.trim(); save(); toast('API ключ сохранён ✓'); }
+    }, 1500);
+  }
+}
+function askApiKey() {
+  const key = prompt('Введи OpenRouter API ключ (sk-or-...) для AI-анализа:');
+  if (key && key.trim()) { state.apiKey = key.trim(); save(); toast('API ключ сохранён ✓'); }
+}
+
+// ── TOAST ─────────────────────────────────────────────────
+function toast(msg, dur=2200) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+</script>
+</body>
+</html>
