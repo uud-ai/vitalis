@@ -725,6 +725,43 @@ body::before {
   </div>
 </div>
 
+
+<!-- SETTINGS SCREEN -->
+<div class="screen" id="settingsScreen">
+  <div style="padding:8px 0 20px">
+    <div style="font-size:20px;font-weight:800;color:var(--green);letter-spacing:-.5px;margin-bottom:4px">⚙ Настройки</div>
+    <div style="font-size:13px;color:var(--text2)">Управление API и данными</div>
+  </div>
+
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:16px">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);background:rgba(0,255,150,.05)">
+      <div style="font-size:11px;font-weight:800;color:var(--green);letter-spacing:.8px;text-transform:uppercase;margin-bottom:2px">Gemini API Key</div>
+      <div style="font-size:12px;color:var(--text2)">Получить бесплатно: aistudio.google.com → 1500 запросов/день</div>
+    </div>
+    <div style="padding:14px 16px">
+      <div id="keyStatusVit" style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--text2)">Ключ не установлен</div>
+      <input type="password" id="vitApiKeyInput"
+        placeholder="AIzaSy..."
+        style="width:100%;padding:12px 14px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;outline:none;margin-bottom:8px;font-family:inherit">
+      <button onclick="saveVitKey()"
+        style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--green);color:#000;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit">
+        Сохранить ключ
+      </button>
+    </div>
+  </div>
+
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:800;color:var(--text2);letter-spacing:.8px;text-transform:uppercase">О приложении</div>
+    </div>
+    <div style="padding:14px 16px;font-size:13px;color:var(--text2);line-height:1.6">
+      <div style="margin-bottom:8px">🤖 AI: Google Gemini 1.5 Flash</div>
+      <div style="margin-bottom:8px">💾 Данные хранятся локально</div>
+      <div style="cursor:pointer;color:#ff4444;font-weight:700;margin-top:12px" onclick="clearVitData()">🗑 Очистить все данные</div>
+    </div>
+  </div>
+</div>
+
 <!-- NAV -->
 <nav class="nav">
   <button class="nav-item active" id="nav-dash" onclick="switchTo('dashScreen')">
@@ -738,6 +775,9 @@ body::before {
   </button>
   <button class="nav-item" id="nav-stats" onclick="switchTo('statsScreen');renderStats()">
     <span class="ni">▦</span>Статистика
+  </button>
+  <button class="nav-item" id="nav-settings" onclick="switchTo('settingsScreen');updateKeyStatusVit()">
+    <span class="ni">⚙</span>Настройки
   </button>
 </nav>
 
@@ -1324,6 +1364,36 @@ function toast(msg, dur=2200) {
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), dur);
 }
+
+// ── SETTINGS ──────────────────────────────────────────────────────────────
+function updateKeyStatusVit() {
+  var el = document.getElementById('keyStatusVit');
+  if (!el) return;
+  if (state.apiKey) {
+    var masked = state.apiKey.slice(0,8) + '••••' + state.apiKey.slice(-4);
+    el.style.color = 'var(--green)';
+    el.textContent = '✓ Ключ установлен: ' + masked;
+  } else {
+    el.style.color = 'var(--text2)';
+    el.textContent = 'Ключ не установлен';
+  }
+}
+function saveVitKey() {
+  var k = document.getElementById('vitApiKeyInput').value.trim();
+  if (!k) { toast('Введи ключ'); return; }
+  state.apiKey = k;
+  save();
+  updateKeyStatusVit();
+  document.getElementById('vitApiKeyInput').value = '';
+  toast('Ключ сохранён ✓');
+}
+function clearVitData() {
+  if (confirm('Удалить все данные и настройки?')) {
+    localStorage.removeItem('vitalis_v1');
+    location.reload();
+  }
+}
+
 </script>
 </body>
 </html>
